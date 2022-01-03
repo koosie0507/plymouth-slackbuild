@@ -1,0 +1,45 @@
+--- init	2022-01-03 18:24:25.754238289 +0200
++++ init.new	2022-01-03 18:25:29.681239369 +0200
+@@ -82,6 +82,7 @@
+ RESUMEDEV=$(cat /resumedev)
+ WAIT=$(cat /wait-for-root)
+ KEYMAP=$(cat /keymap)
++SPLASH=0
+ INIT=/sbin/init
+ 
+ PATH="/sbin:/bin:/usr/sbin:/usr/bin"
+@@ -135,9 +136,13 @@
+     waitforroot=*|rootdelay=*)
+       WAIT=$(echo $ARG | cut -f2 -d=)
+     ;;
++    splash|rhgb)
++      SPLASH=1
++    ;;
+   esac
+ done
+ 
++
+ # If udevd is available, use it to generate block devices
+ # else use mdev to read sysfs and generate the needed devices 
+ if [ -x /sbin/udevd -a -x /sbin/udevadm ]; then
+@@ -168,6 +173,14 @@
+ # A root filesystem on USB is a good example of that.
+ sleep $WAIT
+ 
++if [ $SPLASH -eq 1 -a -x /sbin/plymouthd ]; then
++  if /sbin/plymouthd ; then
++	  [ -x /bin/plymouth ] && /bin/plymouth --show-splash
++  else
++    SPLASH=0
++  fi
++fi
++
+ # Load a custom keyboard mapping:
+ if [ -n "$KEYMAP" ]; then
+   echo "${INITRD}:  Loading '$KEYMAP' keyboard mapping:"
+@@ -357,4 +370,5 @@
+ 
+ [ "$DEVTMPFS" = "1" ] && mount -o move /dev /mnt/dev
+ echo "${INITRD}:  exiting"
++[ $SPLASH -eq 1 -a -x /bin/plymouth ] && /bin/plymouth --newroot=/mnt
+ exec switch_root /mnt $INIT $RUNLEVEL

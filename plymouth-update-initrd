@@ -1,0 +1,21 @@
+#!/bin/bash
+set -e
+
+SCRIPT_DIR="$(cd $(dirname $0) > /dev/null 2>&1 ; pwd)"
+SOURCE_TREE="${SOURCE_TREE:-/boot/initrd-tree}"
+
+echo -n "Creating an empty initrd tree ... "
+mkinitrd -c > /dev/null 2>&1 && echo "done" || (echo "failed" && exit 1)
+
+echo "Copying Plymouth binaries ... "
+cp -v /usr/bin/plymouth ${SOURCE_TREE}/bin
+cp -v /usr/sbin/plymouthd ${SOURCE_TREE}/sbin
+cp -vR /usr/lib64/{plymouth,libply*} ${SOURCE_TREE}/lib64
+cp -vR /usr/share/plymouth ${SOURCE_TREE}/usr/share/
+mkdir -p ${SOURCE_TREE}/etc && cp -vR /etc/plymouth ${SOURCE_TREE}/etc/
+patch -p1 ${SOURCE_TREE}/init < ${SCRIPT_DIR}/init.patch
+
+echo -n "Building initial ramdisk ... "
+mkinitrd -F > /dev/null 2>&1 && echo "done" || (echo "failed" && exit 2)
+
+echo "Please re-run your boot loader."
