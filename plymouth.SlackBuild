@@ -93,6 +93,9 @@ CFLAGS="$SLKCFLAGS" \
 make
 make install DESTDIR=$PKG
 cp -vf ${CWD}/{init.patch,plymouth-update-initrd} ${PKG}/usr/libexec/plymouth/
+mkdir -p ${PKG}/etc/rc.d
+cp -vf ${CWD}/rc.P ${PKG}/etc/rc.d/
+cp -vf ${CWD}/inittab.new ${PKG}/etc/
 
 echo "stripping binaries"
 ( cd $PKG

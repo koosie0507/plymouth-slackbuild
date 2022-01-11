@@ -1,0 +1,95 @@
+#!/bin/sh
+
+if [[ $# -lt 1 ]]; then
+	echo "Please provide a script to run via $0"
+	exit 4
+fi
+
+START_PLYMOUTHD="${START_PLYMOUTHD:-1}"
+SCRIPTDIR="$(cd $(dirname $0) 2> /dev/null; pwd -P)"
+BOOTMODE="--boot-up"
+QUITDAEMON=0
+WRAPPED="$1"
+shift
+
+# parse the rest of the command line
+POSARGS=()
+while [[ $# -gt 0 ]]; do
+	case $1 in
+	-b|--boot-mode)
+		if [[ $# -gt 1 ]]; then
+			BOOTMODE=$2
+			shift 2
+		else
+			shift
+		fi
+	;;
+	-q|--quit)
+		QUITDAEMON=1
+		shift
+	;;
+	*)
+		POSARGS+=("$1")
+		shift
+	;;
+	esac
+done
+
+# use absolute path as is or take a path relative to the script's directory
+case ${WRAPPED} in
+	/*) break ;;
+	*) WRAPPED="${SCRIPTDIR}/${WRAPPED}" ;;
+esac
+
+if [[ ! -x ${WRAPPED} ]]; then
+	echo "${WRAPPED} is not executable."
+	exit 1
+fi
+
+function ply()
+{
+	local ply_cmd="$(which plymouth 2> /dev/null)"
+	if [[ -n $ply_cmd && -x $ply_cmd ]]; then
+		$ply_cmd "$@"
+	else
+		echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ') - $(basename ${WRAPPED})] $@"
+	fi
+}
+
+function display_message()
+{
+	[[ -n "$1" ]] || return 0
+	ply display-message --text="${1}"
+}
+
+function clean_up()
+{
+	if [[ $QUITDAEMON -eq 1 ]]; then ply --quit; fi
+}
+
+trap clean_up EXIT
+
+DAEMON="$(which plymouthd 2> /dev/null)"
+
+if [[ -z "${DAEMON}" ]]; then
+	. ${WRAPPED}
+else
+	if [[ ${START_PLYMOUTHD} -eq 1 ]]; then
+		if ! pgrep -x plymouthd > /dev/null 2>&1 ; then
+			if [[ "--boot-up" == ${BOOTMODE} ]]; then 
+				${DAEMON} --attach-to-session --mode=boot
+			else
+				${DAEMON} --attach-to-session --mode=shutdown
+			fi
+		fi
+	fi
+	ply change-mode ${BOOTMODE}
+	ply show-splash
+	ply unpause-progress
+
+	while read -r line || { EXITCODE=$line; break; }; do
+		display_message "$line"
+	done < <(${WRAPPED} ${POSARGS} 2>&1; printf $?)
+	
+	exit ${EXITCODE:-0}
+fi
